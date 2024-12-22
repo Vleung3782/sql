@@ -29,6 +29,8 @@ Steps to complete this part of the assignment:
 - Load the farmersmarket.db and browse its content
 - Create a logical data model
 
+![alt text](image.png)
+
 <br>
 If this is your first time in DB Browser for SQLite, the following instructions may help:
 
@@ -122,6 +124,21 @@ Steps to complete this part of the assignment:
 1. Write a query that returns everything in the customer table.
 2. Write a query that displays all of the columns and 10 rows from the customer table, sorted by customer_last_name, then customer_first_ name.
 
+1.
+SELECT *
+FROM customer;
+
+2.
+SELECT *
+FROM customer
+ORDER BY	customer_last_name ASC
+LIMIT 10;
+
+SELECT *
+FROM customer
+ORDER BY	customer_first_name ASC
+LIMIT 10
+
 <div align="center">-</div>
 
 #### WHERE
@@ -130,6 +147,17 @@ Steps to complete this part of the assignment:
 	1.  two conditions using AND
 	2.  one condition using BETWEEN
 
+1.
+SELECT *
+FROM customer_purchases
+WHERE product_id = 4 
+OR product_id = 9
+
+2.
+SELECT vendor_id, quantity, cost_to_customer_per_qty, quantity*cost_to_customer_per_qty AS price
+FROM customer_purchases
+WHERE vendor_id BETWEEN 8 AND 10
+
 <div align="center">-</div>
 
 #### CASE
@@ -137,10 +165,42 @@ Steps to complete this part of the assignment:
 
 2. We want to flag all of the different types of pepper products that are sold at the market. Add a column to the previous query called `pepper_flag` that outputs a 1 if the product_name contains the word “pepper” (regardless of capitalization), and otherwise outputs 0.
 
+1.
+SELECT *
+,CASE WHEN product_qty_type = 'unit'
+THEN 'unit'
+ELSE 'bulk'
+END as prod_qty_type_condensed
+FROM product
+
+2.
+SELECT *
+,CASE WHEN product_qty_type = 'unit'
+THEN 'unit'
+ELSE 'bulk'
+END as prod_qty_type_condensed
+,CASE WHEN product_name LIKE '%pepper%'
+THEN 1
+ELSE 0
+END as pepper_flag
+FROM product
+
 <div align="center">-</div>
 
 #### JOIN
 1. Write a query that `INNER JOIN`s the `vendor` table to the `vendor_booth_assignments` table on the `vendor_id` field they both have in common, and sorts the result by `vendor_name`, then `market_date`.
+
+SELECT v.vendor_id, vendor_name, market_date
+FROM vendor as v
+INNER JOIN vendor_booth_assignments as vb
+ON v.vendor_id = vb.vendor_id
+ORDER BY vendor_name ASC
+
+SELECT v.vendor_id, vendor_name, market_date
+FROM vendor as v
+INNER JOIN vendor_booth_assignments as vb
+ON v.vendor_id = vb.vendor_id
+ORDER BY market_date ASC
 
 ***
 
@@ -161,6 +221,30 @@ Steps to complete this part of the assignment:
    
 **HINT**: This query requires you to join two tables, use an aggregate function, and use the HAVING keyword.
 
+1.
+SELECT vendor_id, COUNT (booth_number) AS 'total assignments per vendor_id'
+FROM vendor_booth_assignments
+GROUP BY vendor_id
+
+2.
+SELECT cp.customer_id, quantity*cost_to_customer_per_qty AS price, SUM(quantity*cost_to_customer_per_qty) AS total_spend, c.customer_first_name, c.customer_last_name
+FROM customer_purchases AS cp
+INNER JOIN customer AS c
+ON c.customer_id = cp.customer_id
+GROUP BY c.customer_id
+HAVING total_spend>2000
+ORDER BY customer_last_name 
+
+SELECT cp.customer_id, quantity*cost_to_customer_per_qty AS price, SUM(quantity*cost_to_customer_per_qty) AS total_spend, c.customer_first_name, c.customer_last_name
+FROM customer_purchases AS cp
+INNER JOIN customer AS c
+ON c.customer_id = cp.customer_id
+GROUP BY c.customer_id
+HAVING total_spend>2000
+ORDER BY customer_first_name 
+
+
+
 <div align="center">-</div>
 
 #### Temp Table
@@ -171,13 +255,37 @@ Steps to complete this part of the assignment:
 To insert the new row use VALUES, specifying the value you want for each column:  
 `VALUES(col1,col2,col3,col4,col5)`
 
+CREATE TEMP TABLE new_vendor AS
+SELECT *
+FROM vendor
+
+SELECT *
+FROM  new_vendor
+
+INSERT INTO new_vendor (vendor_id, vendor_name, vendor_type, vendor_owner_first_name, vendor_owner_last_name)
+SELECT '10', 'Thomass Superfoor Store', 'Fresh Focused', 'Thomas', 'Rosenthal'
+
 <div align="center">-</div>
 
 #### Date
 1. Get the customer_id, month, and year (in separate columns) of every purchase in the customer_purchases table.
+
+SELECT customer_id
+,strftime ('%m', market_date) AS Month
+,strftime ('%Y', market_date) AS Year
+FROM customer_purchases
+
    
 **HINT**: you might need to search for strfrtime modifers sqlite on the web to know what the modifers for month and year are!
 
 2. Using the previous query as a base, determine how much money each customer spent in April 2022. Remember that money spent is `quantity*cost_to_customer_per_qty`.
-   
+
+SELECT customer_id, market_date, SUM(quantity*cost_to_customer_per_qty) AS total_spend,
+strftime ('%m', market_date) AS Month,
+strftime ('%Y', market_date) AS Year
+FROM customer_purchases
+WHERE market_date BETWEEN '2022-04-01' AND '2022-04-30'
+GROUP BY customer_id 
+
+
 **HINTS**: you will need to AGGREGATE, GROUP BY, and filter...but remember, STRFTIME returns a STRING for your WHERE statement!!
