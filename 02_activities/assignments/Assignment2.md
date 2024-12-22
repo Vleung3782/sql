@@ -45,16 +45,25 @@ There are several tools online you can use, I'd recommend [Draw.io](https://www.
 
 **HINT:** You do not need to create any data for this prompt. This is a conceptual model only. 
 
+![alt text](image-2.png)
+
 #### Prompt 2
 We want to create employee shifts, splitting up the day into morning and evening. Add this to the ERD.
+![alt text](image-1.png)
+
 
 #### Prompt 3
 The store wants to keep customer addresses. Propose two architectures for the CUSTOMER_ADDRESS table, one that will retain changes, and another that will overwrite. Which is type 1, which is type 2? 
 
 **HINT:** search type 1 vs type 2 slowly changing dimensions. 
 
+In SQL, there are 2 primary architecture types, namely, Type 1 & Type 2, for handling slowly changing dimensions. For Type 1 architecture, the historical data is overwritten by the new data, whereas for Type 2, historical data is stored along with the new data. 
+
+Overall, Type 2 architecture provides a robust and flexible framework for managing data changes and maintaining a complete history of data evolution. Type 2 is used in scenarios where tracking historical changes to data is crucial e.g. financial, healthcare & insurance, e-commerce & retail (including our small business bookstore), government sectors etc. 
+
+Type 1 architecture is suitable for scenarios where only current data is relevant, data is volatile, storage space is limited, data is transient, or real-time data processing is required.
 ```
-Your answer...
+
 ```
 
 ***
@@ -86,6 +95,16 @@ Find the NULLs and then using COALESCE, replace the NULL with a blank for the fi
 
 **HINT**: keep the syntax the same, but edited the correct components with the string. The `||` values concatenate the columns into strings. Edit the appropriate columns -- you're making two edits -- and the NULL rows will be fixed. All the other rows will remain the same.
 
+SELECT 
+    product_name,
+    COALESCE(product_size, ' ') AS product_size,
+    COALESCE(product_qty_type, 'unit') AS product_qty_type
+FROM product;
+
+SELECT 
+    product_name || ', ' || COALESCE(product_size, '  ')  || ' (' || COALESCE(product_qty_type, 'unit')  || ')' AS [product_name   product_size   product_qty_type]
+FROM product;
+
 <div align="center">-</div>
 
 #### Windowed Functions
@@ -95,9 +114,45 @@ You can either display all rows in the customer_purchases table, with the counte
 
 **HINT**: One of these approaches uses ROW_NUMBER() and one uses DENSE_RANK().
 
+SELECT customer_id, market_date,
+	ROW_NUMBER()  OVER(PARTITION BY customer_id ORDER BY market_date ASC) AS visit_number
+FROM customer_purchases;
+
 2. Reverse the numbering of the query from a part so each customer’s most recent visit is labeled 1, then write another query that uses this one as a subquery (or temp table) and filters the results to only the customer’s most recent visit.
 
+ SELECT 
+    customer_id,
+    market_date,
+    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY market_date DESC) AS reversed_visit_number
+FROM 
+    customer_purchases;
+
+SELECT 
+    customer_id,
+    market_date
+FROM 
+  (
+    SELECT 
+      customer_id,
+      market_date,
+      ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY market_date DESC) AS reversed_visit_number
+    FROM 
+      customer_purchases
+  ) AS subquery
+WHERE 
+    reversed_visit_number = 1
+ORDER BY 
+    customer_id;
+
+
+
 3. Using a COUNT() window function, include a value along with each row of the customer_purchases table that indicates how many different times that customer has purchased that product_id.
+
+SELECT customer_id,  product_id, market_date,
+    COUNT() OVER (PARTITION BY customer_id, product_id) AS purchase_count
+FROM customer_purchases
+ORDER BY 
+    customer_id, market_date;
 
 <div align="center">-</div>
 
@@ -110,12 +165,61 @@ You can either display all rows in the customer_purchases table, with the counte
 
 **HINT**: you might need to use INSTR(product_name,'-') to find the hyphens. INSTR will help split the column. 
 
+SELECT 
+    product_name,
+    TRIM(SUBSTR(product_name, INSTR(product_name, '-') + 1)) AS description
+FROM 
+    product;
+
 <div align="center">-</div>
 
 #### UNION
 1. Using a UNION, write a query that displays the market dates with the highest and lowest total sales.
 
 **HINT**: There are a possibly a few ways to do this query, but if you're struggling, try the following: 1) Create a CTE/Temp Table to find sales values grouped dates; 2) Create another CTE/Temp table with a rank windowed function on the previous query to create "best day" and "worst day"; 3) Query the second temp table twice, once for the best day, once for the worst day, with a UNION binding them. 
+
+SELECT 
+    market_date, 
+    SUM(quantity * cost_to_customer_per_qty) AS total_sales
+FROM 
+    customer_purchases
+GROUP BY 
+    market_date;
+
+WITH daily_sales AS (
+  SELECT 
+    market_date, 
+    SUM(quantity * cost_to_customer_per_qty) AS total_sales
+  FROM 
+    customer_purchases
+  GROUP BY 
+    market_date
+),
+ranked_sales AS (
+  SELECT 
+    market_date, 
+    total_sales,
+    RANK() OVER (ORDER BY total_sales DESC) AS sales_rank
+  FROM 
+    daily_sales
+)
+SELECT 
+    market_date, 
+    total_sales
+FROM 
+    ranked_sales
+WHERE 
+    sales_rank = 1
+
+UNION
+
+SELECT 
+    market_date, 
+    total_sales
+FROM 
+    ranked_sales
+WHERE 
+    sales_rank = (SELECT MAX(sales_rank) FROM ranked_sales);
 
 ***
 
@@ -135,6 +239,22 @@ Steps to complete this part of the assignment:
 
 **HINT**: Be sure you select only relevant columns and rows. Remember, CROSS JOIN will explode your table rows, so CROSS JOIN should likely be a subquery. Think a bit about the row counts: how many distinct vendors, product names are there (x)? How many customers are there (y). Before your final group by you should have the product of those two queries (x\*y). 
 
+SELECT 
+  v.vendor_name, 
+  p.product_name, 
+  SUM(vi.original_price * 5 * c.customer_count) AS revenue
+FROM 
+  vendor_inventory vi
+  JOIN vendor v ON vi.vendor_id = v.vendor_id
+  JOIN product p ON vi.product_id = p.product_id
+  CROSS JOIN (
+    SELECT COUNT(*) AS customer_count
+    FROM customer
+  ) c
+GROUP BY 
+  v.vendor_name, 
+  p.product_name;
+
 <div align="center">-</div>
 
 #### INSERT
@@ -142,12 +262,18 @@ Steps to complete this part of the assignment:
 
 2. Using `INSERT`, add a new row to the product_unit table (with an updated timestamp). This can be any product you desire (e.g. add another record for Apple Pie). 
 
+INSERT INTO product_units 
+VALUES ('7', 'Apple Pie', '10''', '3', 'unit', CURRENT_TIMESTAMP)
+
 <div align="center">-</div>
 
 #### DELETE 
 1. Delete the older record for the whatever product you added.
 
 **HINT**: If you don't specify a WHERE clause, [you are going to have a bad time](https://imgflip.com/i/8iq872).
+
+DELETE FROM product_units
+WHERE product_id = 7;
 
 <div align="center">-</div>
 
@@ -160,4 +286,27 @@ ADD current_quantity INT;
 
 Then, using `UPDATE`, change the current_quantity equal to the **last** `quantity` value from the vendor_inventory details. 
 
-**HINT**: This one is pretty hard. First, determine how to get the "last" quantity per product. Second, coalesce null values to 0 (if you don't have null values, figure out how to rearrange your query so you do.) Third, `SET current_quantity = (...your select statement...)`, remembering that WHERE can only accommodate one column. Finally, make sure you have a WHERE statement to update the right row, you'll need to use `product_units.product_id` to refer to the correct row within the product_units table. When you have all of these components, you can run the update statement.
+**HINT**: This one is pretty hard. First, determine how to get the "last" quantity per product. Second, coalesce null values to 0 (if you don't have null values, figure out how to rearrange your query so you do.) Third, `SET current_quantity = (...your select statement...)`, remembering that WHERE can only accommodate one column. Finally, make sure you have a WHERE statement to update the right row, you'll need to use `product_units.product_id` to refer to the correct row within the product_units table. When you have all of these components, you can run the update statement. */
+
+
+SELECT product_id, quantity, 
+  ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY vendor_id DESC) AS rn
+FROM vendor_inventory;
+
+
+SELECT product_id, quantity
+FROM (
+  SELECT product_id, quantity,
+    ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY vendor_id DESC) AS rn
+  FROM vendor_inventory
+) AS subquery
+WHERE rn = 1;
+
+
+SELECT product_id, COALESCE(quantity, 0) AS quantity
+FROM (
+  SELECT product_id, quantity,
+    ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY vendor_id DESC) AS rn
+  FROM vendor_inventory
+)
+WHERE rn = 1;
